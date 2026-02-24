@@ -1,4 +1,4 @@
-﻿import { getTeamCode, getTeamFlagUrl } from '../utils/teamDisplay';
+﻿import { formatTeamLabel } from '../utils/teamDisplay';
 
 export default function GroupSection({ groupName, teams, chances }) {
 
@@ -58,9 +58,8 @@ export default function GroupSection({ groupName, teams, chances }) {
             <div className="flex justify-between items-center mb-1 gap-2">
               <div className="flex items-center gap-1 sm:gap-2 min-w-0">
                 <span className="text-gray-500 text-xs">#{index + 1}</span>
-                <span className="text-base sm:text-lg">{team.flagEmoji}</span>
                 <span className="font-semibold text-sm sm:text-base truncate">
-                  {team.shortName}
+                  {formatTeamLabel(team)}
                 </span>
                 {getStatusBadge(status)}
               </div>

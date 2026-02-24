@@ -1,6 +1,7 @@
-﻿import { useState, useEffect } from 'react';  // ← added useEffect
+﻿import { useState, useEffect } from 'react';
 import { ref, get } from 'firebase/database';
 import { db } from '../firebase/firebase';
+import { formatTeamLabel } from '../utils/teamDisplay';
 
 export default function Predictor({ allTeams }) {
   const [team1Id, setTeam1Id] = useState('');
@@ -8,9 +9,8 @@ export default function Predictor({ allTeams }) {
   const [winnerId, setWinnerId] = useState('');
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [upcomingMatches, setUpcomingMatches] = useState([]);  // ← added
+  const [upcomingMatches, setUpcomingMatches] = useState([]);
 
-  // ← added — load upcoming matches from Firebase
   useEffect(() => {
     const load = async () => {
       try {
@@ -125,6 +125,7 @@ export default function Predictor({ allTeams }) {
           const team = allTeams.find(tm => String(tm.teamId) === id);
           rippleEffects.push({
             teamName: team?.teamName || t.teamName,
+            shortName: team?.shortName || t.shortName,
             flagEmoji: team?.flagEmoji || '',
             beforeChance: b,
             afterChance: a,
@@ -137,6 +138,7 @@ export default function Predictor({ allTeams }) {
       setResult({
         winner: {
           teamName: winnerTeam?.teamName,
+          shortName: winnerTeam?.shortName,
           flagEmoji: winnerTeam?.flagEmoji,
           beforeChance: before[String(winnerId)] || 0,
           afterChance: after[String(winnerId)] || 0,
@@ -144,6 +146,7 @@ export default function Predictor({ allTeams }) {
         },
         loser: {
           teamName: loserTeam?.teamName,
+          shortName: loserTeam?.shortName,
           flagEmoji: loserTeam?.flagEmoji,
           beforeChance: before[String(loserId)] || 0,
           afterChance: after[String(loserId)] || 0,
@@ -182,12 +185,17 @@ export default function Predictor({ allTeams }) {
           <select
             className="w-full bg-gray-800 rounded-lg p-2 text-sm text-white border border-gray-700"
             value={team1Id}
-            onChange={(e) => { setTeam1Id(e.target.value); setTeam2Id(''); setWinnerId(''); setResult(null); }}
+            onChange={(e) => {
+              setTeam1Id(e.target.value);
+              setTeam2Id('');
+              setWinnerId('');
+              setResult(null);
+            }}
           >
             <option value="">Select...</option>
             {allTeams.map((t) => (
               <option key={t.teamId} value={t.teamId}>
-                {t.flagEmoji} {t.teamName}
+                {formatTeamLabel(t)}
               </option>
             ))}
           </select>
@@ -198,10 +206,14 @@ export default function Predictor({ allTeams }) {
           <select
             className="w-full bg-gray-800 rounded-lg p-2 text-sm text-white border border-gray-700"
             value={team2Id}
-            onChange={(e) => { setTeam2Id(e.target.value); setWinnerId(''); setResult(null); }}
+            onChange={(e) => {
+              setTeam2Id(e.target.value);
+              setWinnerId('');
+              setResult(null);
+            }}
           >
             <option value="">Select...</option>
-            {allTeams  // ← CHANGED — filters only upcoming opponents
+            {allTeams
               .filter(t => {
                 if (isSameId(t.teamId, team1Id)) return false;
                 if (upcomingMatches.length === 0) return true;
@@ -214,7 +226,7 @@ export default function Predictor({ allTeams }) {
               })
               .map((t) => (
                 <option key={t.teamId} value={t.teamId}>
-                  {t.flagEmoji} {t.teamName}
+                  {formatTeamLabel(t)}
                 </option>
               ))}
           </select>
@@ -232,7 +244,7 @@ export default function Predictor({ allTeams }) {
               const t = allTeams.find((team) => isSameId(team.teamId, id));
               return t ? (
                 <option key={t.teamId} value={t.teamId}>
-                  {t.flagEmoji} {t.teamName}
+                  {formatTeamLabel(t)}
                 </option>
               ) : null;
             })}
@@ -255,7 +267,7 @@ export default function Predictor({ allTeams }) {
 
           <div className="bg-gray-800 rounded-xl p-3 flex justify-between items-center">
             <span className="font-semibold">
-              {result.winner?.flagEmoji} {result.winner?.teamName}
+              {formatTeamLabel(result.winner)}
             </span>
             <div className="text-right">
               <span className="text-gray-400 text-sm">{fmt(result.winner?.beforeChance)}%</span>
@@ -269,7 +281,7 @@ export default function Predictor({ allTeams }) {
 
           <div className="bg-gray-800 rounded-xl p-3 flex justify-between items-center">
             <span className="font-semibold">
-              {result.loser?.flagEmoji} {result.loser?.teamName}
+              {formatTeamLabel(result.loser)}
             </span>
             <div className="text-right">
               <span className="text-gray-400 text-sm">{fmt(result.loser?.beforeChance)}%</span>
@@ -287,7 +299,7 @@ export default function Predictor({ allTeams }) {
               {result.rippleEffects.map((r, i) => (
                 <div key={i} className="bg-gray-800 rounded-xl p-3 flex justify-between items-center">
                   <span className="font-semibold text-sm">
-                    {r.flagEmoji} {r.teamName}
+                    {formatTeamLabel(r)}
                   </span>
                   <span className={`text-sm font-bold ${r.direction === 'UP' ? 'text-green-400' : 'text-red-400'}`}>
                     {getArrow(r.direction, r.change)}
@@ -301,4 +313,3 @@ export default function Predictor({ allTeams }) {
     </div>
   );
 }
-
