@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+﻿import { useState, useEffect } from 'react';  // ← added useEffect
 import { ref, get } from 'firebase/database';
 import { db } from '../firebase/firebase';
 
@@ -8,17 +8,30 @@ export default function Predictor({ allTeams }) {
   const [winnerId, setWinnerId] = useState('');
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [upcomingMatches, setUpcomingMatches] = useState([]);  // ← added
+
+  // ← added — load upcoming matches from Firebase
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const snapshot = await get(ref(db, 'worldcup/upcomingMatches'));
+        const data = snapshot.val();
+        if (data) setUpcomingMatches(Object.values(data));
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    load();
+  }, []);
 
   const sameTeam = team1Id && team2Id && String(team1Id) === String(team2Id);
 
-  // ─── Run simulation in frontend using Firebase data ───────
   const handlePredict = async () => {
     if (!team1Id || !team2Id || !winnerId || sameTeam) return;
     setLoading(true);
     setResult(null);
 
     try {
-      // Get all data from Firebase
       const snapshot = await get(ref(db, 'worldcup'));
       const data = snapshot.val();
 
@@ -30,9 +43,8 @@ export default function Predictor({ allTeams }) {
 
       const pointsTable = Object.values(data.pointsTable || {});
       const chances = Object.values(data.qualificationChances || {});
-      const upcomingMatches = Object.values(data.upcomingMatches || {});
+      const upcomingMatchesList = Object.values(data.upcomingMatches || {});
 
-      // Find group of selected teams
       const team1Data = pointsTable.find(t => String(t.teamId) === String(team1Id));
       if (!team1Data) {
         alert('Team data not found');
@@ -41,24 +53,20 @@ export default function Predictor({ allTeams }) {
       }
       const groupName = String(team1Data.groupName);
 
-      // Filter group teams and matches
       const groupTable = pointsTable.filter(t => String(t.groupName) === groupName);
-      const groupMatches = upcomingMatches.filter(m =>
+      const groupMatches = upcomingMatchesList.filter(m =>
         String(m.team1GroupName) === groupName ||
         String(m.team2GroupName) === groupName
       );
 
-      // Exclude the predicted match
       const remaining = groupMatches.filter(m => !(
         (String(m.team1Id) === String(team1Id) && String(m.team2Id) === String(team2Id)) ||
         (String(m.team1Id) === String(team2Id) && String(m.team2Id) === String(team1Id))
       ));
 
-      // Get before chances
       const before = {};
       chances.forEach(c => { before[String(c.teamId)] = c.qualifyPercentage; });
 
-      // Force winner points
       const forcedPoints = {};
       const forcedNRR = {};
       groupTable.forEach(t => {
@@ -67,7 +75,6 @@ export default function Predictor({ allTeams }) {
       });
       forcedPoints[String(winnerId)] = (forcedPoints[String(winnerId)] || 0) + 2;
 
-      // Simulate all remaining match outcomes
       const n = remaining.length;
       const total = Math.pow(2, n);
       const qualifyCount = {};
@@ -85,26 +92,22 @@ export default function Predictor({ allTeams }) {
           }
         }
 
-        // Get top 2 by points then NRR
         const sorted = Object.entries(tempPoints).sort((a, b) => {
           const ptsDiff = b[1] - a[1];
           if (ptsDiff !== 0) return ptsDiff;
           return (forcedNRR[b[0]] || 0) - (forcedNRR[a[0]] || 0);
         });
 
-        const top2 = sorted.slice(0, 2).map(e => e[0]);
-        top2.forEach(id => {
-          qualifyCount[id] = (qualifyCount[id] || 0) + 1;
+        sorted.slice(0, 2).forEach(e => {
+          qualifyCount[e[0]] = (qualifyCount[e[0]] || 0) + 1;
         });
       }
 
-      // Calculate after percentages
       const after = {};
       Object.entries(qualifyCount).forEach(([id, count]) => {
         after[id] = (count * 100.0) / total;
       });
 
-      // Build result
       const loserId = String(winnerId) === String(team1Id) ?
         String(team2Id) : String(team1Id);
 
@@ -173,13 +176,13 @@ export default function Predictor({ allTeams }) {
         See how a match result changes qualification chances
       </p>
 
-<div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4">
         <div>
           <label className="text-xs text-gray-400 mb-1 block">Team 1</label>
           <select
-              className="w-full bg-gray-800 rounded-lg p-2 text-sm text-white border border-gray-700"
+            className="w-full bg-gray-800 rounded-lg p-2 text-sm text-white border border-gray-700"
             value={team1Id}
-            onChange={(e) => { setTeam1Id(e.target.value); setWinnerId(''); setResult(null); }}
+            onChange={(e) => { setTeam1Id(e.target.value); setTeam2Id(''); setWinnerId(''); setResult(null); }}
           >
             <option value="">Select...</option>
             {allTeams.map((t) => (
@@ -193,13 +196,22 @@ export default function Predictor({ allTeams }) {
         <div>
           <label className="text-xs text-gray-400 mb-1 block">Team 2</label>
           <select
-            className="w-full bg-gray-800 rounded-lg p-2 text-sm text-white"
+            className="w-full bg-gray-800 rounded-lg p-2 text-sm text-white border border-gray-700"
             value={team2Id}
             onChange={(e) => { setTeam2Id(e.target.value); setWinnerId(''); setResult(null); }}
           >
             <option value="">Select...</option>
-            {allTeams
-              .filter((t) => !isSameId(t.teamId, team1Id))
+            {allTeams  // ← CHANGED — filters only upcoming opponents
+              .filter(t => {
+                if (isSameId(t.teamId, team1Id)) return false;
+                if (upcomingMatches.length === 0) return true;
+                return upcomingMatches.some(m =>
+                  (String(m.team1Id) === String(team1Id) &&
+                   String(m.team2Id) === String(t.teamId)) ||
+                  (String(m.team2Id) === String(team1Id) &&
+                   String(m.team1Id) === String(t.teamId))
+                );
+              })
               .map((t) => (
                 <option key={t.teamId} value={t.teamId}>
                   {t.flagEmoji} {t.teamName}
@@ -211,7 +223,7 @@ export default function Predictor({ allTeams }) {
         <div>
           <label className="text-xs text-gray-400 mb-1 block">Winner</label>
           <select
-            className="w-full bg-gray-800 rounded-lg p-2 text-sm text-white"
+            className="w-full bg-gray-800 rounded-lg p-2 text-sm text-white border border-gray-700"
             value={winnerId}
             onChange={(e) => { setWinnerId(e.target.value); setResult(null); }}
           >
@@ -289,3 +301,4 @@ export default function Predictor({ allTeams }) {
     </div>
   );
 }
+
