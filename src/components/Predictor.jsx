@@ -173,11 +173,11 @@ export default function Predictor({ allTeams }) {
         See how a match result changes qualification chances
       </p>
 
-      <div className="grid grid-cols-3 gap-3 mb-4">
+<div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4">
         <div>
           <label className="text-xs text-gray-400 mb-1 block">Team 1</label>
           <select
-            className="w-full bg-gray-800 rounded-lg p-2 text-sm text-white"
+              className="w-full bg-gray-800 rounded-lg p-2 text-sm text-white border border-gray-700"
             value={team1Id}
             onChange={(e) => { setTeam1Id(e.target.value); setWinnerId(''); setResult(null); }}
           >
